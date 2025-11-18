@@ -27,16 +27,18 @@ export class TheGraphService {
 
         if (!endpoint) {
             // 如果没有对应的 endpoint，使用模拟数据
+            console.warn(`No endpoint configured for chainId ${chainId}, using mock data`);
             return this.getMockTransactions(address);
         }
 
         try {
-            // 针对本地 wallet-transfer subgraph 的查询
-            if (chainId === 31337 || chainId === 1337) {
+            // 针对本地和 Sepolia 的 wallet-transfer subgraph 查询
+            if (chainId === 31337 || chainId === 1337 || chainId === 11155111) {
+                console.log(`Using wallet-transfer subgraph query for chainId ${chainId}`);
                 return await this.getWalletTransferTransactions(address, endpoint);
             }
 
-            // 实际的 GraphQL 查询示例（其他网络）
+            // 其他网络的通用查询（保留，以备将来使用）
             const query = `
                 query GetTransactions($address: String!) {
                     transactions(
@@ -75,7 +77,7 @@ export class TheGraphService {
 
             if (result.errors) {
                 console.error('GraphQL errors:', result.errors);
-                throw new Error('GraphQL query failed');
+                throw new Error('GraphQL query failed: ' + JSON.stringify(result.errors));
             }
 
             // 转换数据格式
@@ -83,29 +85,44 @@ export class TheGraphService {
 
         } catch (error) {
             console.error('The Graph query failed:', error);
+            console.error('Error details:', error.message);
             // 查询失败时返回模拟数据
             return this.getMockTransactions(address);
         }
     }
 
     /**
-     * 查询本地 wallet-transfer subgraph
+     * 查询 wallet-transfer subgraph
      * @param {string} address - 用户地址
      * @param {string} endpoint - GraphQL endpoint
      */
     async getWalletTransferTransactions(address, endpoint) {
+        console.log('Querying wallet-transfer subgraph:', { address, endpoint });
+
+        // 使用两个查询分别获取发送和接收的转账，然后合并
+        // 因为某些版本的 The Graph 不支持 OR 条件
         const query = `
-            query GetTransfers($from: Bytes, $to: Bytes) {
-                transfers(
-                    where: {
-                        or: [
-                            { from: $from },
-                            { to: $to }
-                        ]
-                    }
+            query GetTransfers($address: Bytes!) {
+                fromTransfers: transfers(
+                    where: { from: $address }
                     orderBy: timestamp
                     orderDirection: desc
-                    first: 20
+                    first: 10
+                ) {
+                    id
+                    from
+                    to
+                    amount
+                    timestamp
+                    blockNumber
+                    blockTimestamp
+                    transactionHash
+                }
+                toTransfers: transfers(
+                    where: { to: $address }
+                    orderBy: timestamp
+                    orderDirection: desc
+                    first: 10
                 ) {
                     id
                     from
@@ -123,42 +140,74 @@ export class TheGraphService {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
+                'Accept': 'application/json',
             },
             body: JSON.stringify({
                 query,
                 variables: {
-                    from: address.toLowerCase(),
-                    to: address.toLowerCase()
+                    address: address.toLowerCase()
                 }
             })
         });
 
+        if (!response.ok) {
+            console.error('HTTP error:', response.status, response.statusText);
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
         const result = await response.json();
+        console.log('GraphQL response:', result);
 
         if (result.errors) {
             console.error('GraphQL errors:', result.errors);
             throw new Error('GraphQL query failed: ' + JSON.stringify(result.errors));
         }
 
+        // 合并发送和接收的转账
+        const fromTransfers = result.data?.fromTransfers || [];
+        const toTransfers = result.data?.toTransfers || [];
+        const allTransfers = [...fromTransfers, ...toTransfers];
+
+        // 去重（同一个 id 可能同时出现在两个列表中）
+        const uniqueTransfers = Array.from(
+            new Map(allTransfers.map(t => [t.id, t])).values()
+        );
+
+        // 按时间戳排序
+        uniqueTransfers.sort((a, b) => parseInt(b.timestamp) - parseInt(a.timestamp));
+
+        console.log(`Found ${uniqueTransfers.length} unique transfers`);
+
         // 转换为统一格式
-        return this.formatWalletTransferData(result.data?.transfers || []);
+        return this.formatWalletTransferData(uniqueTransfers);
     }
 
     /**
      * 格式化 WalletTransfer 数据
      */
     formatWalletTransferData(transfers) {
-        return transfers.map(transfer => ({
-            hash: transfer.transactionHash,
-            from: transfer.from,
-            to: transfer.to,
-            value: this.weiToEth(transfer.amount),
-            data: '0x',
-            blockNumber: parseInt(transfer.blockNumber),
-            timestamp: parseInt(transfer.timestamp),
-            status: 'Success',
-            gasUsed: 'N/A'
-        }));
+        console.log('Formatting transfers:', transfers);
+
+        return transfers.map(transfer => {
+            // 处理可能的 BigInt 或 字符串类型
+            const amount = typeof transfer.amount === 'string' ? transfer.amount : transfer.amount.toString();
+            const blockNumber = typeof transfer.blockNumber === 'string' ?
+                parseInt(transfer.blockNumber) : Number(transfer.blockNumber);
+            const timestamp = typeof transfer.timestamp === 'string' ?
+                parseInt(transfer.timestamp) : Number(transfer.timestamp);
+
+            return {
+                hash: transfer.transactionHash,
+                from: transfer.from,
+                to: transfer.to,
+                value: this.weiToEth(amount),
+                data: '0x',
+                blockNumber: blockNumber,
+                timestamp: timestamp,
+                status: 'Success',
+                gasUsed: 'N/A'
+            };
+        });
     }
 
     /**
@@ -182,7 +231,17 @@ export class TheGraphService {
      * Wei 转 ETH
      */
     weiToEth(wei) {
-        return (parseInt(wei) / 1e18).toString();
+        try {
+            // 处理字符串、数字或 BigInt 类型
+            const weiValue = typeof wei === 'string' ? wei : wei.toString();
+            // 使用 BigInt 进行精确计算，避免精度丢失
+            const weiNum = BigInt(weiValue);
+            const ethValue = Number(weiNum) / 1e18;
+            return ethValue.toString();
+        } catch (error) {
+            console.error('Error converting Wei to ETH:', error, wei);
+            return '0';
+        }
     }
 
     /**

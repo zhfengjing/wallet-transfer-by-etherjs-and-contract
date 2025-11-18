@@ -4,8 +4,20 @@ import { TheGraphService } from './thegraph.js';
 import { ContractService } from './contract.js';
 class WalletApp {
     constructor() {
-        console.log('🔧 [WalletApp] 构造函数被调用');
+        // 🚨 调试：检查是否重复实例化
+        if (window.__walletAppInstanceCount === undefined) {
+            window.__walletAppInstanceCount = 0;
+        }
+        window.__walletAppInstanceCount++;
+
+        console.log('🔧 [WalletApp] 构造函数被调用 - 实例编号:', window.__walletAppInstanceCount);
         console.trace('调用栈:');
+
+        // 🚨 如果实例数量大于1，说明有重复实例化
+        if (window.__walletAppInstanceCount > 1) {
+            console.error('⚠️⚠️⚠️ 警告：WalletApp 被多次实例化！当前实例数：', window.__walletAppInstanceCount);
+            console.error('这会导致事件监听器重复绑定和其他问题');
+        }
 
         this.provider = null;
         this.signer = null;
@@ -15,8 +27,20 @@ class WalletApp {
         this.contractService = new ContractService();
         this.currentNetwork = null;
         this.eventListenersSetup = false; // 防止重复设置事件监听器
+
+        // 保存事件处理函数的引用，以便后续移除
+        this.accountsChangedHandler = null;
+        this.chainChangedHandler = null;
+
         this.initEventListeners();
         this.checkConnection();
+
+        // 页面卸载时清理事件监听器
+        window.addEventListener('beforeunload', () => {
+            console.log('🚨 [beforeunload] 页面即将卸载/刷新');
+            console.trace('卸载调用栈:');
+            this.cleanup();
+        });
     }
 
     initEventListeners() {
@@ -134,6 +158,9 @@ class WalletApp {
         document.getElementById('sendBtn').disabled = false;
         document.getElementById('fetchDirectBtn').disabled = false;
         document.getElementById('fetchContractBtn').disabled = false;
+         document.getElementById('contractDepositBtn').disabled = false;
+        document.getElementById('contractTransferBtn').disabled = false;
+        document.getElementById('contractWithdrawBtn').disabled = false;
     }
 
     getNetworkName(chainId) {
@@ -159,8 +186,11 @@ class WalletApp {
             return;
         }
 
-        // 账户变化监听器
-        const accountsChangedHandler = (accounts) => {
+        // 先移除旧的监听器（如果存在）
+        this.removeMetaMaskListeners();
+
+        // 定义账户变化监听器
+        this.accountsChangedHandler = (accounts) => {
             console.log('🔔 [accountsChanged] 触发');
             console.log('   新账户列表:', accounts);
             console.log('   当前账户:', this.userAddress);
@@ -193,20 +223,43 @@ class WalletApp {
             }
         };
 
-        // 网络变化监听器
-        const chainChangedHandler = (chainId) => {
+        // 定义网络变化监听器
+        this.chainChangedHandler = (chainId) => {
             console.log('🔔 [chainChanged] 网络变化，Chain ID:', chainId);
             console.log('   重新加载钱包信息');
+            window.location.reload();
             // 不刷新页面，而是重新加载钱包信息
-            this.updateWalletInfo().catch(err => console.error('更新钱包信息失败:', err));
+            // this.updateWalletInfo().catch(err => console.error('更新钱包信息失败:', err));
         };
 
         // 添加事件监听器
-        window.ethereum.on('accountsChanged', accountsChangedHandler);
-        window.ethereum.on('chainChanged', chainChangedHandler);
+        window.ethereum.on('accountsChanged', this.accountsChangedHandler);
+        window.ethereum.on('chainChanged', this.chainChangedHandler);
 
         this.eventListenersSetup = true;
         console.log('   ✅ 事件监听器设置完成（不会自动刷新页面）');
+    }
+
+    // 移除 MetaMask 事件监听器
+    removeMetaMaskListeners() {
+        if (typeof window.ethereum !== 'undefined') {
+            if (this.accountsChangedHandler) {
+                window.ethereum.removeListener('accountsChanged', this.accountsChangedHandler);
+                console.log('   🗑️ 移除 accountsChanged 监听器');
+            }
+            if (this.chainChangedHandler) {
+                window.ethereum.removeListener('chainChanged', this.chainChangedHandler);
+                console.log('   🗑️ 移除 chainChanged 监听器');
+            }
+        }
+    }
+
+    // 清理所有资源
+    cleanup() {
+        console.log('🧹 [cleanup] 清理资源');
+        this.removeMetaMaskListeners();
+        this.contractService.removeAllListeners();
+        this.eventListenersSetup = false;
     }
 
     showWalletConnected() {
@@ -255,7 +308,7 @@ class WalletApp {
         this.signer = null;
         this.userAddress = null;
         this.currentNetwork = null;
-        
+
         document.getElementById('walletSection').style.display = 'none';
         document.getElementById('connectBtn').style.display = 'inline-block';
         document.getElementById('walletInfo').style.display = 'none';
@@ -264,14 +317,20 @@ class WalletApp {
         document.getElementById('fetchContractBtn').disabled = true;
         document.getElementById('directTxHistory').innerHTML = '';
         document.getElementById('contractTxHistory').innerHTML = '';
-
+        document.getElementById('contractDepositBtn').disabled = true;
+        document.getElementById('contractTransferBtn').disabled = true;
+        document.getElementById('contractWithdrawBtn').disabled = true;
+        
         // 重置合约余额显示
         document.getElementById('contractUserBalance').textContent = '-';
         document.getElementById('contractTotalBalance').textContent = '-';
 
         this.showStatus('success', '已断开钱包连接');
-        // 移除合约事件监听
+
+        // 移除所有事件监听器
+        this.removeMetaMaskListeners();
         this.contractService.removeAllListeners();
+        this.eventListenersSetup = false;
     }
 
     async sendTransaction() {
@@ -741,4 +800,5 @@ class WalletApp {
 }
 
 export default WalletApp;
+// ⚠️ 不要在这里实例化！应该在 index.html 中实例化，避免重复创建
 // const app = new WalletApp();
