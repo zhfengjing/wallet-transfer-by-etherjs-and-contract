@@ -18,11 +18,19 @@ async function main() {
   console.log("🌐 Network:", hre.network.name);
   console.log("⛓️  Chain ID:", hre.network.config.chainId);
 
-  // Get deployment transaction
+  // Get deployment transaction and receipt
   const deploymentTx = walletTransfer.deploymentTransaction();
+  let blockNumber = null;
+
   if (deploymentTx) {
     console.log("📝 Transaction hash:", deploymentTx.hash);
-    console.log("🔢 Block number:", deploymentTx.blockNumber);
+
+    // Wait for transaction receipt to get block number
+    const receipt = await deploymentTx.wait();
+    blockNumber = receipt.blockNumber;
+
+    console.log("🔢 Block number:", blockNumber);
+    console.log("⛽ Gas used:", receipt.gasUsed.toString());
   }
 
   // Save deployment info
@@ -32,7 +40,7 @@ async function main() {
     network: hre.network.name,
     chainId: hre.network.config.chainId,
     deploymentTxHash: deploymentTx?.hash,
-    blockNumber: deploymentTx?.blockNumber,
+    blockNumber: blockNumber,
     timestamp: new Date().toISOString()
   };
 

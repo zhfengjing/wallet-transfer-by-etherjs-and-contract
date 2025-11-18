@@ -4,6 +4,9 @@ import { TheGraphService } from './thegraph.js';
 import { ContractService } from './contract.js';
 class WalletApp {
     constructor() {
+        console.log('🔧 [WalletApp] 构造函数被调用');
+        console.trace('调用栈:');
+
         this.provider = null;
         this.signer = null;
         this.userAddress = null;
@@ -11,6 +14,7 @@ class WalletApp {
         this.graphService = new TheGraphService();
         this.contractService = new ContractService();
         this.currentNetwork = null;
+        this.eventListenersSetup = false; // 防止重复设置事件监听器
         this.initEventListeners();
         this.checkConnection();
     }
@@ -53,11 +57,14 @@ class WalletApp {
     }
 
     async checkConnection() {
+        console.log('🔍 [checkConnection] 被调用');
         if (typeof window.ethereum !== 'undefined') {
             try {
                 const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+                console.log('   已连接账户:', accounts);
                 if (accounts.length > 0) {
-                    await this.connectWallet();
+                    console.log('   → 调用 connectWallet()');
+                    await this.connectWallet(accounts[0]);
                 }
             } catch (error) {
                 console.error('检查连接失败:', error);
@@ -65,25 +72,33 @@ class WalletApp {
         }
     }
 
-    async connectWallet() {
+    async connectWallet(account) {
+        console.log('🔌 [connectWallet] 被调用');
+        console.trace('调用栈:');
+
         try {
             if (typeof window.ethereum === 'undefined') {
                 alert('请先安装 MetaMask!');
                 window.open('https://metamask.io/download/', '_blank');
                 return;
             }
-
-            await window.ethereum.request({ method: 'eth_requestAccounts' });
+            if (!account) {
+                await window.ethereum.request({ method: 'eth_requestAccounts' });
+            }
 
             this.provider = new BrowserProvider(window.ethereum);
             this.signer = await this.provider.getSigner();
             this.userAddress = await this.signer.getAddress();
+
+            console.log('   连接的账户:', this.userAddress);
 
             // 初始化合约服务
             this.contractService.initialize(this.signer);
 
             await this.updateWalletInfo();
             await this.updateContractInfo();
+
+            console.log('   → 调用 setupEventListeners()');
             this.setupEventListeners();
             this.showWalletConnected();
 
@@ -135,35 +150,63 @@ class WalletApp {
     }
 
     setupEventListeners() {
-        // 先移除所有旧的监听器，防止重复添加
-        if (window.ethereum && window.ethereum.removeAllListeners) {
-            window.ethereum.removeAllListeners('accountsChanged');
-            window.ethereum.removeAllListeners('chainChanged');
+        console.log('⚙️ [setupEventListeners] 被调用');
+        console.trace('调用栈:');
+
+        // 如果已经设置过事件监听器，直接返回
+        if (this.eventListenersSetup) {
+            console.log('   ⚠️ 事件监听器已设置，跳过');
+            return;
         }
 
         // 账户变化监听器
-        window.ethereum.on('accountsChanged', (accounts) => {
-            console.log('账户变化accountsChanged:', accounts);
-            if (accounts.length === 0) {
+        const accountsChangedHandler = (accounts) => {
+            console.log('🔔 [accountsChanged] 触发');
+            console.log('   新账户列表:', accounts);
+            console.log('   当前账户:', this.userAddress);
+
+            if (!accounts || accounts.length === 0) {
+                console.log('   → 账户列表为空，断开连接');
                 this.disconnectWallet();
-            } else {
-                // 只有当账户真正改变时才刷新页面
-                const newAccount = accounts[0].toLowerCase();
-                const currentAccount = this.userAddress.toLowerCase();
-                if (newAccount !== currentAccount) {
-                    console.log('账户已改变，刷新页面');
-                    window.location.reload();
-                } else {
-                    console.log('账户未改变，不刷新页面');
-                }
+                return;
             }
-        });
+
+            // 检查账户是否存在
+            if (!accounts[0]) {
+                console.log('   → 账户地址为空，忽略此事件');
+                return;
+            }
+
+            // 只有当账户真正改变时才更新UI
+            const newAccount = accounts[0].toLowerCase();
+            const currentAccount = this.userAddress ? this.userAddress.toLowerCase() : '';
+
+            console.log('   比较: 新=' + newAccount + ', 当前=' + currentAccount);
+
+            if (newAccount !== currentAccount) {
+                console.log('   ❌ 账户已改变，重新加载钱包信息');
+                // 不刷新页面，而是重新连接钱包
+                this.userAddress = accounts[0];
+                this.updateWalletInfo().catch(err => console.error('更新钱包信息失败:', err));
+            } else {
+                console.log('   ✅ 账户未改变，忽略');
+            }
+        };
 
         // 网络变化监听器
-        window.ethereum.on('chainChanged', () => {
-            console.log('网络变化chainChanged');
-            window.location.reload();
-        });
+        const chainChangedHandler = (chainId) => {
+            console.log('🔔 [chainChanged] 网络变化，Chain ID:', chainId);
+            console.log('   重新加载钱包信息');
+            // 不刷新页面，而是重新加载钱包信息
+            this.updateWalletInfo().catch(err => console.error('更新钱包信息失败:', err));
+        };
+
+        // 添加事件监听器
+        window.ethereum.on('accountsChanged', accountsChangedHandler);
+        window.ethereum.on('chainChanged', chainChangedHandler);
+
+        this.eventListenersSetup = true;
+        console.log('   ✅ 事件监听器设置完成（不会自动刷新页面）');
     }
 
     showWalletConnected() {
@@ -564,7 +607,8 @@ class WalletApp {
         try {
             const userBalance = await this.contractService.getBalance(this.userAddress);
             const contractBalance = await this.contractService.getContractBalance();
-
+            
+            document.getElementById('contractAddress').textContent = this.contractService.contractAddress;
             document.getElementById('contractUserBalance').textContent = parseFloat(userBalance).toFixed(6);
             document.getElementById('contractTotalBalance').textContent = parseFloat(contractBalance).toFixed(6);
         } catch (error) {
@@ -696,4 +740,5 @@ class WalletApp {
     }
 }
 
-const app = new WalletApp();
+export default WalletApp;
+// const app = new WalletApp();

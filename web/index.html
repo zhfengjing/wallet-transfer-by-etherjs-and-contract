@@ -145,7 +145,7 @@
                     <div class="info-grid">
                         <div class="info-item">
                             <label>合约地址:</label>
-                            <span class="info-value address" style="font-size: 0.85em;">0x5FbDB2315678afecb367f032d93F642f64180aa3</span>
+                            <span class="info-value address" style="font-size: 0.85em;" id="contractAddress">-</span>
                         </div>
                         <div class="info-item">
                             <label>您在合约中的余额:</label>
@@ -289,6 +289,10 @@
         <p>Built with Ethers.js v6 | ⚠️ 仅供学习使用，请在测试网络上测试</p>
     </footer>
 
-    <script type="module" src="app.js"></script>
+    <!-- <script type="module" src="app.js"></script> -->
+    <script type="module">
+        import WalletApp from './app.js';
+        const app = new WalletApp();
+    </script>
 </body>
 </html>

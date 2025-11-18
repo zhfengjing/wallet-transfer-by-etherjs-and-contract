@@ -1,7 +1,8 @@
 {
-  "contractAddress": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
-  "network": "localhost",
-  "deploymentTxHash": "0xa88d9791e326ff733be8dcf6112275245f0a4f344542fee4d3bb0cb5e0970cac",
-  "blockNumber": 1,
-  "timestamp": "2025-11-17T12:23:27.935Z"
+  "contractAddress": "0x069357B8C08eeF623B47dF4302AF7a48F380bb82",
+  "network": "sepolia",
+  "chainId": 11155111,
+  "deploymentTxHash": "0x97d03634cbe86231a4e08d1a5452a9994713e520ff4c587756f6113e88446665",
+  "blockNumber": 9655684,
+  "timestamp": "2025-11-18T14:29:36.427Z"
 }

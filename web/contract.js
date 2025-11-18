@@ -3,7 +3,7 @@ import { Contract, parseEther, formatEther } from 'https://cdn.jsdelivr.net/npm/
 // 使用json方式引入（新，旧两种方式，需要浏览器支持）
 import contractData from './contractAbi.json' with { type: 'json' };//新语法，需要浏览器支持 JSON 模块（Chrome 91+, Firefox 89+）
 // import contractData from './contractAbi.json' assert { type: 'json' }; //旧语法，需要浏览器支持 JSON 模块（Chrome 91+, Firefox 89+）
-// console.log('Loaded contract  data:', contractData);
+console.log('Loaded contract  data:', contractData);
 /**
  * WalletTransfer Contract Service
  * 处理与 WalletTransfer 合约的所有交互
@@ -11,7 +11,7 @@ import contractData from './contractAbi.json' with { type: 'json' };//新语法�
 export class ContractService {
     constructor() {
         // 合约地址 - 从 subgraph.yaml 中获取
-        this.contractAddress = '0x5FbDB2315678afecb367f032d93F642f64180aa3';
+        this.contractAddress = contractData.address;
 
         // WalletTransfer 合约 ABI
         this.contractABI = [

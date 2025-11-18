@@ -7,7 +7,8 @@ export class TheGraphService {
         // The Graph API endpoints for different networks
         this.endpoints = {
             1: 'https://api.thegraph.com/subgraphs/name/blocklytics/ethereum-blocks',
-            11155111: 'https://api.studio.thegraph.com/query/sepolia/blocks',
+            11155111: 'https://api.studio.thegraph.com/query/119822/wallet-transfer-subgraph/v0.0.1',
+            // 11155111: 'https://api.studio.thegraph.com/query/sepolia/blocks',
             137: 'https://api.thegraph.com/subgraphs/name/matthewlilley/polygon-blocks',
             // 本地开发网络 - 连接到本地 Graph Node
             31337: 'http://127.0.0.1:8000/subgraphs/name/wallet-transfer',
