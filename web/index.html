@@ -16,7 +16,7 @@
             
             <!-- 钱包信息区 -->
             <div class="wallet-controls">
-                <button id="connectBtn" class="btn btn-primary">连接 MetaMask</button>
+                <button id="connectBtn" class="btn btn-primary" type="button">连接 MetaMask</button>
                 
                 <div id="walletSection" class="wallet-section" style="display: none;">
                     <!-- 网络切换 -->
@@ -36,7 +36,7 @@
                             <span class="network-badge" id="currentNetwork">Ethereum</span>
                             <span class="wallet-address" id="walletAddress">0x0000...0000</span>
                         </div>
-                        <button id="disconnectBtn" class="btn btn-disconnect">断开</button>
+                        <button id="disconnectBtn" class="btn btn-disconnect" type="button">断开</button>
                     </div>
                 </div>
             </div>
@@ -52,7 +52,7 @@
                     <label>地址:</label>
                     <div class="info-value">
                         <span id="fullAddress">-</span>
-                        <button id="copyAddressBtn" class="btn-icon" title="复制地址">📋</button>
+                        <button id="copyAddressBtn" class="btn-icon" title="复制地址" type="button">📋</button>
                     </div>
                 </div>
                 <div class="info-item">
@@ -70,55 +70,159 @@
             </div>
         </div>
 
-        <!-- 转账区域 -->
-        <div class="section">
-            <h2>💸 发送加密转账</h2>
-            <div class="form-container">
-                <div class="form-group">
-                    <label for="recipientAddress">接收地址:</label>
-                    <input type="text" id="recipientAddress" placeholder="0x..." class="input-field">
+        <!-- 转账功能区域 - Tab 切换 -->
+        <div id="transferSection" class="section">
+            <h2>💸 转账功能</h2>
+
+            <!-- Tab 导航 -->
+            <div class="tab-navigation">
+                <button type="button" class="tab-btn active" data-tab="direct">
+                    📡 直接转账 (Ethers.js)
+                </button>
+                <button type="button" class="tab-btn" data-tab="contract">
+                    🏦 合约转账 (The Graph)
+                </button>
+            </div>
+
+            <!-- Tab 1: 直接转账 -->
+            <div id="directTab" class="tab-content active">
+                <div class="tab-description">
+                    <p>💡 使用 Ethers.js 直接在区块链上发送加密转账，支持附带加密消息</p>
                 </div>
-                <div class="form-row">
+
+                <!-- 转账表单 -->
+                <div class="form-container">
+                    <div class="form-group">
+                        <label for="recipientAddress">接收地址:</label>
+                        <input type="text" id="recipientAddress" placeholder="0x..." class="input-field">
+                    </div>
                     <div class="form-group">
                         <label for="amount">转账金额 (ETH):</label>
                         <input type="number" id="amount" step="0.001" placeholder="0.01" class="input-field">
                     </div>
+                    <div class="form-group">
+                        <label for="message">消息 (将被加密为16进制):</label>
+                        <input type="text" id="message" placeholder="转账备注信息" class="input-field">
+                        <small>💡 此消息将使用 XOR 加密并转换为16进制数据存储在链上</small>
+                    </div>
+                    <button type="button" id="sendBtn" class="btn btn-success btn-large" disabled>
+                        <span>🚀 发送交易</span>
+                    </button>
+                    <div id="txStatus" class="status-box"></div>
                 </div>
-                <div class="form-group">
-                    <label for="message">消息 (将被加密为16进制):</label>
-                    <input type="text" id="message" placeholder="转账备注信息" class="input-field">
-                    <small>💡 此消息将使用 XOR 加密并转换为16进制数据存储在链上</small>
-                </div>
-                <button id="sendBtn" class="btn btn-success btn-large" disabled>
-                    <span>🚀 发送交易</span>
-                </button>
-                <div id="txStatus" class="status-box"></div>
-            </div>
-        </div>
 
-        <!-- 查询交易历史 -->
-        <div class="section">
-            <h2>📜 查询交易历史</h2>
-            <div class="query-methods">
-                <div class="method-card" id="ethersMethod">
-                    <h3>📡 Ethers.js v6</h3>
-                    <p>直接从区块链节点查询交易数据</p>
-                    <button id="fetchEthersBtn" class="btn btn-info" disabled>使用 Ethers.js 查询</button>
-                </div>
-                <div class="method-card" id="graphMethod">
-                    <h3>🔍 The Graph</h3>
-                    <p>使用 GraphQL 从索引数据库查询</p>
-                    <button id="fetchGraphBtn" class="btn btn-warning" disabled>使用 The Graph 查询</button>
+                <!-- 直接转账历史 -->
+                <div class="history-section">
+                    <div class="history-header">
+                        <h3>📜 交易历史</h3>
+                        <button type="button" id="fetchDirectBtn" class="btn btn-info" disabled>
+                            🔄 查询交易
+                        </button>
+                    </div>
+                    <div class="data-source-indicator">
+                        <span>数据来源: <strong>Ethers.js - 直接从区块链查询</strong></span>
+                    </div>
+                    <div id="directTxHistory" class="tx-history">
+                        <div class="no-data"><p>💡 请先连接钱包并进行转账，然后点击"查询交易"按钮</p></div>
+                    </div>
                 </div>
             </div>
-            <div class="data-source-indicator">
-                <span>数据来源: <strong id="dataSource">-</strong></span>
+
+            <!-- Tab 2: 合约转账 -->
+            <div id="contractTab" class="tab-content">
+                <div class="tab-description">
+                    <p>💡 通过 WalletTransfer 合约进行转账，使用 The Graph 查询历史记录</p>
+                </div>
+
+                <!-- 合约信息 -->
+                <div style="background: rgba(255, 193, 7, 0.1); border-left: 4px solid #ffc107; padding: 12px 15px; margin-bottom: 20px; border-radius: 8px;">
+                    <p style="color: rgba(0,0,0, 0.9); font-size: 0.9em; margin: 0;">
+                        💡 <strong>提示：</strong>如果合约地址不同，请在 <code>contract.js</code> 文件中修改 <code>contractAddress</code> 变量
+                    </p>
+                </div>
+
+                <div class="contract-info">
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <label>合约地址:</label>
+                            <span class="info-value address" style="font-size: 0.85em;">0x5FbDB2315678afecb367f032d93F642f64180aa3</span>
+                        </div>
+                        <div class="info-item">
+                            <label>您在合约中的余额:</label>
+                            <span class="info-value">
+                                <span id="contractUserBalance">-</span> ETH
+                                <button type="button" id="refreshContractBalanceBtn" class="btn-icon" title="刷新余额">🔄</button>
+                            </span>
+                        </div>
+                        <div class="info-item">
+                            <label>合约总余额:</label>
+                            <span class="info-value"><span id="contractTotalBalance">-</span> ETH</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 合约操作 -->
+                <div class="contract-operations">
+                    <!-- 存入 ETH -->
+                    <div class="operation-card">
+                        <h3>📥 存入 ETH</h3>
+                        <p>向合约存入 ETH，存入后您可以使用合约进行转账</p>
+                        <div class="form-group">
+                            <label for="contractDepositAmount">存入金额 (ETH):</label>
+                            <input type="number" id="contractDepositAmount" step="0.001" placeholder="0.1" class="input-field">
+                        </div>
+                        <button type="button" id="contractDepositBtn" class="btn btn-info">💰 存入</button>
+                    </div>
+
+                    <!-- 合约内转账 -->
+                    <div class="operation-card">
+                        <h3>🔄 合约内转账</h3>
+                        <p>使用您在合约中的余额向其他地址转账</p>
+                        <div class="form-group">
+                            <label for="contractTransferTo">接收地址:</label>
+                            <input type="text" id="contractTransferTo" placeholder="0x..." class="input-field">
+                        </div>
+                        <div class="form-group">
+                            <label for="contractTransferAmount">转账金额 (ETH):</label>
+                            <input type="number" id="contractTransferAmount" step="0.001" placeholder="0.01" class="input-field">
+                        </div>
+                        <button type="button" id="contractTransferBtn" class="btn btn-primary">📤 转账</button>
+                    </div>
+
+                    <!-- 提取 ETH -->
+                    <div class="operation-card">
+                        <h3>📤 提取 ETH</h3>
+                        <p>从合约中提取您的 ETH 到钱包</p>
+                        <div class="form-group">
+                            <label for="contractWithdrawAmount">提取金额 (ETH):</label>
+                            <input type="number" id="contractWithdrawAmount" step="0.001" placeholder="0.05" class="input-field">
+                        </div>
+                        <button type="button" id="contractWithdrawBtn" class="btn btn-warning">💸 提取</button>
+                    </div>
+                </div>
+
+                <div id="contractStatus" class="status-box"></div>
+
+                <!-- 合约转账历史 -->
+                <div class="history-section">
+                    <div class="history-header">
+                        <h3>📜 合约转账历史</h3>
+                        <button type="button" id="fetchContractBtn" class="btn btn-warning" disabled>
+                            🔄 查询 The Graph
+                        </button>
+                    </div>
+                    <div class="data-source-indicator">
+                        <span>数据来源: <strong>The Graph - 本地 wallet-transfer subgraph</strong></span>
+                    </div>
+                    <div id="contractTxHistory" class="tx-history">
+                        <div class="no-data"><p>💡 请先连接钱包并通过合约转账，然后点击"查询 The Graph"按钮</p></div>
+                    </div>
+                </div>
             </div>
-            <div id="txHistory" class="tx-history"></div>
         </div>
 
         <!-- 加密/解密工具 -->
-        <div class="section">
+        <!-- <div class="section">
             <h2>🔐 加密/解密工具</h2>
             <div class="crypto-tools">
                 <div class="tool-section">
@@ -147,7 +251,7 @@
                     </div>
                 </div>
             </div>
-        </div>
+        </div> -->
 
         <!-- 功能说明 -->
         <div class="section info-section">
@@ -158,12 +262,20 @@
                     <p>连接 MetaMask 钱包，支持多网络切换</p>
                 </div>
                 <div class="feature-item">
+                    <h4>🏦 合约操作</h4>
+                    <p>通过 WalletTransfer 合约进行存入、转账和提取操作</p>
+                </div>
+                <div class="feature-item">
                     <h4>💰 加密转账</h4>
                     <p>发送 ETH 并附带加密消息，数据以16进制存储</p>
                 </div>
                 <div class="feature-item">
                     <h4>📊 双重查询</h4>
                     <p>使用 Ethers.js 或 The Graph 查询链上数据</p>
+                </div>
+                <div class="feature-item">
+                    <h4>🔍 The Graph 集成</h4>
+                    <p>连接本地 Graph Node，查询 wallet-transfer subgraph</p>
                 </div>
                 <div class="feature-item">
                     <h4>🔐 自动解密</h4>

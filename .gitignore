@@ -17,6 +17,7 @@ coverage/
 logs/
 node_modules/
 dist/
+generated/ 
 
 *.tsbuildinfo
 *.env

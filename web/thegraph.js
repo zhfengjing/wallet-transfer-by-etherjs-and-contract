@@ -8,7 +8,10 @@ export class TheGraphService {
         this.endpoints = {
             1: 'https://api.thegraph.com/subgraphs/name/blocklytics/ethereum-blocks',
             11155111: 'https://api.studio.thegraph.com/query/sepolia/blocks',
-            137: 'https://api.thegraph.com/subgraphs/name/matthewlilley/polygon-blocks'
+            137: 'https://api.thegraph.com/subgraphs/name/matthewlilley/polygon-blocks',
+            // 本地开发网络 - 连接到本地 Graph Node
+            31337: 'http://127.0.0.1:8000/subgraphs/name/wallet-transfer',
+            1337: 'http://127.0.0.1:8000/subgraphs/name/wallet-transfer'
         };
     }
 
@@ -20,14 +23,19 @@ export class TheGraphService {
      */
     async getTransactions(address, chainId) {
         const endpoint = this.endpoints[chainId];
-        
+
         if (!endpoint) {
             // 如果没有对应的 endpoint，使用模拟数据
             return this.getMockTransactions(address);
         }
 
         try {
-            // 实际的 GraphQL 查询示例
+            // 针对本地 wallet-transfer subgraph 的查询
+            if (chainId === 31337 || chainId === 1337) {
+                return await this.getWalletTransferTransactions(address, endpoint);
+            }
+
+            // 实际的 GraphQL 查询示例（其他网络）
             const query = `
                 query GetTransactions($address: String!) {
                     transactions(
@@ -63,7 +71,7 @@ export class TheGraphService {
             });
 
             const result = await response.json();
-            
+
             if (result.errors) {
                 console.error('GraphQL errors:', result.errors);
                 throw new Error('GraphQL query failed');
@@ -71,12 +79,85 @@ export class TheGraphService {
 
             // 转换数据格式
             return this.formatTransactions(result.data?.transactions || []);
-            
+
         } catch (error) {
             console.error('The Graph query failed:', error);
             // 查询失败时返回模拟数据
             return this.getMockTransactions(address);
         }
+    }
+
+    /**
+     * 查询本地 wallet-transfer subgraph
+     * @param {string} address - 用户地址
+     * @param {string} endpoint - GraphQL endpoint
+     */
+    async getWalletTransferTransactions(address, endpoint) {
+        const query = `
+            query GetTransfers($from: Bytes, $to: Bytes) {
+                transfers(
+                    where: {
+                        or: [
+                            { from: $from },
+                            { to: $to }
+                        ]
+                    }
+                    orderBy: timestamp
+                    orderDirection: desc
+                    first: 20
+                ) {
+                    id
+                    from
+                    to
+                    amount
+                    timestamp
+                    blockNumber
+                    blockTimestamp
+                    transactionHash
+                }
+            }
+        `;
+
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                query,
+                variables: {
+                    from: address.toLowerCase(),
+                    to: address.toLowerCase()
+                }
+            })
+        });
+
+        const result = await response.json();
+
+        if (result.errors) {
+            console.error('GraphQL errors:', result.errors);
+            throw new Error('GraphQL query failed: ' + JSON.stringify(result.errors));
+        }
+
+        // 转换为统一格式
+        return this.formatWalletTransferData(result.data?.transfers || []);
+    }
+
+    /**
+     * 格式化 WalletTransfer 数据
+     */
+    formatWalletTransferData(transfers) {
+        return transfers.map(transfer => ({
+            hash: transfer.transactionHash,
+            from: transfer.from,
+            to: transfer.to,
+            value: this.weiToEth(transfer.amount),
+            data: '0x',
+            blockNumber: parseInt(transfer.blockNumber),
+            timestamp: parseInt(transfer.timestamp),
+            status: 'Success',
+            gasUsed: 'N/A'
+        }));
     }
 
     /**

@@ -1,0 +1,20 @@
+{
+  "name": "wallet-transfer-subgraph",
+  "version": "0.1.0",
+  "scripts": {
+    "codegen": "graph codegen",
+    "build": "graph build",
+    "deploy": "graph deploy",
+    "deploy:local": "graph deploy --node http://localhost:8020/ --ipfs http://localhost:5001 wallet-transfer",
+    "create:local": "graph create --node http://localhost:8020/ wallet-transfer",
+    "remove:local": "graph remove --node http://localhost:8020/ wallet-transfer",
+    "test:query": "curl http://localhost:8030/graphql -X POST -H \"Content-Type: application/json\" -d '{\"query\": \"{ indexingStatuses { subgraph synced health } }\"}'",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:logs": "docker-compose logs -f graph-node"
+  },
+  "dependencies": {
+    "@graphprotocol/graph-cli": "latest",
+    "@graphprotocol/graph-ts": "latest"
+  }
+}

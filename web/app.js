@@ -1,7 +1,7 @@
 import { BrowserProvider, parseEther, formatEther, isAddress } from 'https://cdn.jsdelivr.net/npm/ethers@6.13.0/+esm';
 import { CryptoUtils } from './crypto.js';
 import { TheGraphService } from './thegraph.js';
-
+import { ContractService } from './contract.js';
 class WalletApp {
     constructor() {
         this.provider = null;
@@ -9,6 +9,7 @@ class WalletApp {
         this.userAddress = null;
         this.crypto = new CryptoUtils();
         this.graphService = new TheGraphService();
+        this.contractService = new ContractService();
         this.currentNetwork = null;
         this.initEventListeners();
         this.checkConnection();
@@ -19,11 +20,36 @@ class WalletApp {
         document.getElementById('disconnectBtn').addEventListener('click', () => this.disconnectWallet());
         document.getElementById('networkSwitch').addEventListener('change', (e) => this.switchNetwork(e.target.value));
         document.getElementById('sendBtn').addEventListener('click', () => this.sendTransaction());
-        document.getElementById('fetchEthersBtn').addEventListener('click', () => this.fetchTransactionsEthers());
-        document.getElementById('fetchGraphBtn').addEventListener('click', () => this.fetchTransactionsGraph());
-        document.getElementById('encryptBtn').addEventListener('click', () => this.encryptText());
-        document.getElementById('decryptBtn').addEventListener('click', () => this.decryptText());
+
+        // 加密/解密工具（如果存在）
+        const encryptBtn = document.getElementById('encryptBtn');
+        if (encryptBtn) {
+            encryptBtn.addEventListener('click', () => this.encryptText());
+        }
+        const decryptBtn = document.getElementById('decryptBtn');
+        if (decryptBtn) {
+            decryptBtn.addEventListener('click', () => this.decryptText());
+        }
+
         document.getElementById('copyAddressBtn').addEventListener('click', () => this.copyAddress());
+
+        // Tab 切换事件监听
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.switchTab(e.currentTarget.dataset.tab);
+            });
+        });
+
+        // 直接转账相关
+        document.getElementById('fetchDirectBtn').addEventListener('click', () => this.fetchDirectTransactions());
+
+        // 合约相关事件监听
+        document.getElementById('contractDepositBtn').addEventListener('click', () => this.contractDeposit());
+        document.getElementById('contractTransferBtn').addEventListener('click', () => this.contractTransfer());
+        document.getElementById('contractWithdrawBtn').addEventListener('click', () => this.contractWithdraw());
+        document.getElementById('refreshContractBalanceBtn').addEventListener('click', () => this.refreshContractBalance());
+        document.getElementById('fetchContractBtn').addEventListener('click', () => this.fetchContractTransactions());
     }
 
     async checkConnection() {
@@ -48,15 +74,19 @@ class WalletApp {
             }
 
             await window.ethereum.request({ method: 'eth_requestAccounts' });
-            
+
             this.provider = new BrowserProvider(window.ethereum);
             this.signer = await this.provider.getSigner();
             this.userAddress = await this.signer.getAddress();
 
+            // 初始化合约服务
+            this.contractService.initialize(this.signer);
+
             await this.updateWalletInfo();
+            await this.updateContractInfo();
             this.setupEventListeners();
             this.showWalletConnected();
-            
+
             this.showStatus('success', '✅ 钱包连接成功!');
         } catch (error) {
             console.error('连接钱包失败:', error);
@@ -87,8 +117,8 @@ class WalletApp {
         
         document.getElementById('walletInfo').style.display = 'block';
         document.getElementById('sendBtn').disabled = false;
-        document.getElementById('fetchEthersBtn').disabled = false;
-        document.getElementById('fetchGraphBtn').disabled = false;
+        document.getElementById('fetchDirectBtn').disabled = false;
+        document.getElementById('fetchContractBtn').disabled = false;
     }
 
     getNetworkName(chainId) {
@@ -105,15 +135,33 @@ class WalletApp {
     }
 
     setupEventListeners() {
+        // 先移除所有旧的监听器，防止重复添加
+        if (window.ethereum && window.ethereum.removeAllListeners) {
+            window.ethereum.removeAllListeners('accountsChanged');
+            window.ethereum.removeAllListeners('chainChanged');
+        }
+
+        // 账户变化监听器
         window.ethereum.on('accountsChanged', (accounts) => {
+            console.log('账户变化accountsChanged:', accounts);
             if (accounts.length === 0) {
                 this.disconnectWallet();
             } else {
-                window.location.reload();
+                // 只有当账户真正改变时才刷新页面
+                const newAccount = accounts[0].toLowerCase();
+                const currentAccount = this.userAddress.toLowerCase();
+                if (newAccount !== currentAccount) {
+                    console.log('账户已改变，刷新页面');
+                    window.location.reload();
+                } else {
+                    console.log('账户未改变，不刷新页面');
+                }
             }
         });
 
+        // 网络变化监听器
         window.ethereum.on('chainChanged', () => {
+            console.log('网络变化chainChanged');
             window.location.reload();
         });
     }
@@ -169,11 +217,18 @@ class WalletApp {
         document.getElementById('connectBtn').style.display = 'inline-block';
         document.getElementById('walletInfo').style.display = 'none';
         document.getElementById('sendBtn').disabled = true;
-        document.getElementById('fetchEthersBtn').disabled = true;
-        document.getElementById('fetchGraphBtn').disabled = true;
-        document.getElementById('txHistory').innerHTML = '';
-        
+        document.getElementById('fetchDirectBtn').disabled = true;
+        document.getElementById('fetchContractBtn').disabled = true;
+        document.getElementById('directTxHistory').innerHTML = '';
+        document.getElementById('contractTxHistory').innerHTML = '';
+
+        // 重置合约余额显示
+        document.getElementById('contractUserBalance').textContent = '-';
+        document.getElementById('contractTotalBalance').textContent = '-';
+
         this.showStatus('success', '已断开钱包连接');
+        // 移除合约事件监听
+        this.contractService.removeAllListeners();
     }
 
     async sendTransaction() {
@@ -186,7 +241,7 @@ class WalletApp {
             return;
         }
 
-        if (!amount || parseFloat(amount) <= 0) {
+        if ((!amount && amount !== '0') || parseFloat(amount) < 0) {
             this.showStatus('error', '❌ 请输入有效的转账金额');
             return;
         }
@@ -230,44 +285,72 @@ class WalletApp {
         }
     }
 
-    async fetchTransactionsEthers() {
+    async fetchContractTransactions() {
         try {
-            this.showStatus('loading', '⏳ 使用 Ethers.js 获取交易历史...');
-            document.getElementById('dataSource').textContent = 'Ethers.js v6';
-            document.getElementById('ethersMethod').classList.add('method-card-active');
-            document.getElementById('graphMethod').classList.remove('method-card-active');
-
-            // const currentBlock = await this.provider.getBlockNumber();
-            const currentBlock = this.currentBlockNumber;
-            console.log('当前交易的区块号:', currentBlock);
-            const history = await this.getTransactionsFromBlocks(currentBlock);
-
-            this.displayTransactions(history);
-            this.showStatus('success', `✅ 通过 Ethers.js 获取了 ${history.length} 条交易记录`);
-
-        } catch (error) {
-            console.error('获取交易失败:', error);
-            this.showStatus('error', '❌ 获取交易失败: ' + error.message);
-        }
-    }
-
-    async fetchTransactionsGraph() {
-        try {
-            this.showStatus('loading', '⏳ 使用 The Graph 获取交易历史...');
-            document.getElementById('dataSource').textContent = 'The Graph';
-            document.getElementById('ethersMethod').classList.remove('method-card-active');
-            document.getElementById('graphMethod').classList.add('method-card-active');
+            this.showContractStatus('loading', '⏳ 使用 The Graph 获取合约转账历史...');
 
             const chainId = Number(this.currentNetwork.chainId);
             const history = await this.graphService.getTransactions(this.userAddress, chainId);
 
-            this.displayTransactions(history);
-            this.showStatus('success', `✅ 通过 The Graph 获取了 ${history.length} 条交易记录`);
+            this.displayContractTransactions(history);
+            this.showContractStatus('success', `✅ 通过 The Graph 获取了 ${history.length} 条合约转账记录`);
 
         } catch (error) {
-            console.error('获取交易失败:', error);
-            this.showStatus('error', '❌ The Graph 查询失败: ' + error.message);
+            console.error('获取合约转账失败:', error);
+            this.showContractStatus('error', '❌ The Graph 查询失败: ' + error.message);
         }
+    }
+
+    displayContractTransactions(transactions) {
+        const container = document.getElementById('contractTxHistory');
+
+        if (transactions.length === 0) {
+            container.innerHTML = '<div class="no-data"><p>📭 暂无合约转账记录</p></div>';
+            return;
+        }
+
+        container.innerHTML = transactions.map(tx => {
+            const type = tx.from.toLowerCase() === this.userAddress.toLowerCase() ? '发送' : '接收';
+            const typeClass = type === '发送' ? 'sent' : 'received';
+
+            const date = tx.timestamp ? new Date(tx.timestamp * 1000).toLocaleString('zh-CN') : 'N/A';
+
+            return `
+                <div class="tx-item ${typeClass}">
+                    <div class="tx-header">
+                        <span class="tx-type-badge ${typeClass}">${type}</span>
+                        <span class="tx-date">${date}</span>
+                    </div>
+                    <div class="tx-details">
+                        <div class="tx-row">
+                            <strong>哈希:</strong>
+                            <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" class="tx-hash">${tx.hash}</a>
+                        </div>
+                        <div class="tx-row">
+                            <strong>From:</strong>
+                            <span class="address">${tx.from}</span>
+                        </div>
+                        <div class="tx-row">
+                            <strong>To:</strong>
+                            <span class="address">${tx.to || 'Contract Creation'}</span>
+                        </div>
+                        <div class="tx-row">
+                            <strong>金额:</strong>
+                            <span class="amount">${parseFloat(tx.value).toFixed(6)} ETH</span>
+                        </div>
+                        <div class="tx-row">
+                            <strong>状态:</strong>
+                            <span class="status ${tx.status === 'Success' ? 'success' : 'failed'}">${tx.status}</span>
+                        </div>
+                         <div class="tx-row">
+                            <strong>区块号:</strong>
+                            <span class="blocknumber">${tx.blockNumber}</span>
+                        </div>
+                        ${tx.gasUsed && tx.gasUsed !== 'N/A' ? `<div class="tx-row"><strong>Gas:</strong> ${tx.gasUsed}</div>` : ''}
+                    </div>
+                </div>
+            `;
+        }).join('');
     }
 
     async getTransactionsFromBlocks(currentBlock) {
@@ -311,9 +394,101 @@ class WalletApp {
         return transactions;
     }
 
-    displayTransactions(transactions) {
-        const container = document.getElementById('txHistory');
-        
+
+    copyAddress() {
+        navigator.clipboard.writeText(this.userAddress).then(() => {
+            const btn = document.getElementById('copyAddressBtn');
+            const originalText = btn.textContent;
+            btn.textContent = '✓ 已复制';
+            setTimeout(() => {
+                btn.textContent = originalText;
+            }, 2000);
+        });
+    }
+
+    encryptText() {
+        const plainText = document.getElementById('plainText').value.trim();
+        if (!plainText) {
+            alert('请输入要加密的文本');
+            return;
+        }
+
+        const encrypted = this.crypto.encrypt(plainText);
+        document.getElementById('encryptedText').value = encrypted;
+    }
+
+    decryptText() {
+        const hexText = document.getElementById('hexToDecrypt').value.trim();
+        if (!hexText) {
+            alert('请输入要解密的16进制文本');
+            return;
+        }
+
+        try {
+            const decrypted = this.crypto.decrypt(hexText);
+            document.getElementById('decryptedText').value = decrypted;
+        } catch (error) {
+            alert('解密失败: ' + error.message);
+        }
+    }
+
+    showStatus(type, message) {
+        const statusBox = document.getElementById('txStatus');
+        statusBox.className = 'status-box ' + type;
+        statusBox.innerHTML = message.replace(/\n/g, '<br>');
+    }
+
+    showContractStatus(type, message) {
+        const statusBox = document.getElementById('contractStatus');
+        statusBox.className = 'status-box ' + type;
+        statusBox.innerHTML = message.replace(/\n/g, '<br>');
+    }
+
+    // ============ Tab 切换功能 ============
+
+    switchTab(tabName) {
+        // 更新 tab 按钮状态
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.classList.remove('active');
+            if (btn.dataset.tab === tabName) {
+                btn.classList.add('active');
+            }
+        });
+
+        // 更新 tab 内容显示
+        document.querySelectorAll('.tab-content').forEach(content => {
+            content.classList.remove('active');
+        });
+
+        if (tabName === 'direct') {
+            document.getElementById('directTab').classList.add('active');
+        } else if (tabName === 'contract') {
+            document.getElementById('contractTab').classList.add('active');
+        }
+    }
+
+    // ============ 直接转账功能 ============
+
+    async fetchDirectTransactions() {
+        try {
+            this.showStatus('loading', '⏳ 使用 Ethers.js 获取交易历史...');
+
+            const currentBlock = this.currentBlockNumber;
+            console.log('当前交易的区块号:', currentBlock);
+            const history = await this.getTransactionsFromBlocks(currentBlock);
+
+            this.displayDirectTransactions(history);
+            this.showStatus('success', `✅ 通过 Ethers.js 获取了 ${history.length} 条交易记录`);
+
+        } catch (error) {
+            console.error('获取交易失败:', error);
+            this.showStatus('error', '❌ 获取交易失败: ' + error.message);
+        }
+    }
+
+    displayDirectTransactions(transactions) {
+        const container = document.getElementById('directTxHistory');
+
         if (transactions.length === 0) {
             container.innerHTML = '<div class="no-data"><p>📭 暂无交易记录</p></div>';
             return;
@@ -323,7 +498,7 @@ class WalletApp {
             const type = tx.from.toLowerCase() === this.userAddress.toLowerCase() ? '发送' : '接收';
             const typeClass = type === '发送' ? 'sent' : 'received';
             let decryptedMessage = '';
-            
+
             if (tx.data && tx.data !== '0x' && tx.data.length > 2) {
                 try {
                     const hexData = tx.data.substring(2);
@@ -383,47 +558,141 @@ class WalletApp {
         }).join('');
     }
 
-    copyAddress() {
-        navigator.clipboard.writeText(this.userAddress).then(() => {
-            const btn = document.getElementById('copyAddressBtn');
-            const originalText = btn.textContent;
-            btn.textContent = '✓ 已复制';
-            setTimeout(() => {
-                btn.textContent = originalText;
-            }, 2000);
-        });
-    }
+    // ============ 合约功能 ============
 
-    encryptText() {
-        const plainText = document.getElementById('plainText').value.trim();
-        if (!plainText) {
-            alert('请输入要加密的文本');
-            return;
+    async updateContractInfo() {
+        try {
+            const userBalance = await this.contractService.getBalance(this.userAddress);
+            const contractBalance = await this.contractService.getContractBalance();
+
+            document.getElementById('contractUserBalance').textContent = parseFloat(userBalance).toFixed(6);
+            document.getElementById('contractTotalBalance').textContent = parseFloat(contractBalance).toFixed(6);
+        } catch (error) {
+            console.error('更新合约信息失败:', error);
+            document.getElementById('contractUserBalance').textContent = '无法获取';
+            document.getElementById('contractTotalBalance').textContent = '无法获取';
+            this.showContractStatus('error', '⚠️ 无法连接到合约，请确保：\n1. 已连接到正确的网络\n2. 合约地址正确\n3. 合约已部署');
         }
-
-        const encrypted = this.crypto.encrypt(plainText);
-        document.getElementById('encryptedText').value = encrypted;
     }
 
-    decryptText() {
-        const hexText = document.getElementById('hexToDecrypt').value.trim();
-        if (!hexText) {
-            alert('请输入要解密的16进制文本');
+    async refreshContractBalance() {
+        try {
+            this.showContractStatus('loading', '⏳ 刷新余额中...');
+            await this.updateContractInfo();
+            this.showContractStatus('success', '✅ 余额已刷新');
+        } catch (error) {
+            console.error('刷新余额失败:', error);
+            this.showContractStatus('error', '❌ 刷新失败: ' + error.message);
+        }
+    }
+
+    async contractDeposit() {
+        const amount = document.getElementById('contractDepositAmount').value.trim();
+
+        if (!amount || parseFloat(amount) <= 0) {
+            this.showContractStatus('error', '❌ 请输入有效的存入金额');
             return;
         }
 
         try {
-            const decrypted = this.crypto.decrypt(hexText);
-            document.getElementById('decryptedText').value = decrypted;
+            this.showContractStatus('loading', '⏳ 正在向合约存入 ETH...');
+
+            const tx = await this.contractService.deposit(amount);
+            this.showContractStatus('loading', `⏳ 交易已提交，等待确认...\nTxHash: ${tx.hash}`);
+
+            const receipt = await tx.wait();
+            console.log('存入成功:', receipt);
+
+            this.showContractStatus('success',
+                `✅ 存入成功!\n` +
+                `金额: ${amount} ETH\n` +
+                `TxHash: ${receipt.hash}\n` +
+                `Gas Used: ${receipt.gasUsed.toString()}`
+            );
+
+            await this.updateWalletInfo();
+            await this.updateContractInfo();
+            document.getElementById('contractDepositAmount').value = '';
+
         } catch (error) {
-            alert('解密失败: ' + error.message);
+            console.error('存入失败:', error);
+            this.showContractStatus('error', '❌ 存入失败: ' + (error.reason || error.message));
         }
     }
 
-    showStatus(type, message) {
-        const statusBox = document.getElementById('txStatus');
-        statusBox.className = 'status-box ' + type;
-        statusBox.innerHTML = message.replace(/\n/g, '<br>');
+    async contractTransfer() {
+        const recipient = document.getElementById('contractTransferTo').value.trim();
+        const amount = document.getElementById('contractTransferAmount').value.trim();
+
+        if (!isAddress(recipient)) {
+            this.showContractStatus('error', '❌ 请输入有效的以太坊地址');
+            return;
+        }
+
+        if (!amount || parseFloat(amount) <= 0) {
+            this.showContractStatus('error', '❌ 请输入有效的转账金额');
+            return;
+        }
+
+        try {
+            this.showContractStatus('loading', '⏳ 正在通过合约转账...');
+
+            const tx = await this.contractService.transfer(recipient, amount);
+            this.showContractStatus('loading', `⏳ 交易已提交，等待确认...\nTxHash: ${tx.hash}`);
+
+            const receipt = await tx.wait();
+            console.log('转账成功:', receipt);
+
+            this.showContractStatus('success',
+                `✅ 合约转账成功!\n` +
+                `接收地址: ${recipient}\n` +
+                `金额: ${amount} ETH\n` +
+                `TxHash: ${receipt.hash}\n` +
+                `Gas Used: ${receipt.gasUsed.toString()}`
+            );
+
+            await this.updateContractInfo();
+            document.getElementById('contractTransferTo').value = '';
+            document.getElementById('contractTransferAmount').value = '';
+
+        } catch (error) {
+            console.error('转账失败:', error);
+            this.showContractStatus('error', '❌ 转账失败: ' + (error.reason || error.message));
+        }
+    }
+
+    async contractWithdraw() {
+        const amount = document.getElementById('contractWithdrawAmount').value.trim();
+
+        if (!amount || parseFloat(amount) <= 0) {
+            this.showContractStatus('error', '❌ 请输入有效的提取金额');
+            return;
+        }
+
+        try {
+            this.showContractStatus('loading', '⏳ 正在从合约提取 ETH...');
+
+            const tx = await this.contractService.withdraw(amount);
+            this.showContractStatus('loading', `⏳ 交易已提交，等待确认...\nTxHash: ${tx.hash}`);
+
+            const receipt = await tx.wait();
+            console.log('提取成功:', receipt);
+
+            this.showContractStatus('success',
+                `✅ 提取成功!\n` +
+                `金额: ${amount} ETH\n` +
+                `TxHash: ${receipt.hash}\n` +
+                `Gas Used: ${receipt.gasUsed.toString()}`
+            );
+
+            await this.updateWalletInfo();
+            await this.updateContractInfo();
+            document.getElementById('contractWithdrawAmount').value = '';
+
+        } catch (error) {
+            console.error('提取失败:', error);
+            this.showContractStatus('error', '❌ 提取失败: ' + (error.reason || error.message));
+        }
     }
 }
 
