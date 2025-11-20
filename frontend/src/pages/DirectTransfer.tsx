@@ -21,26 +21,56 @@ export function DirectTransfer() {
     if (!address || !publicClient) return;
 
     try {
-      const latestBlock = await publicClient.getBlockNumber();
-      const fromBlock = latestBlock - 5n; // 查询最近5个区块
+      console.log('Loading recent transactions for address:', address);
+      const latestBlockNumber = await publicClient.getBlockNumber();
+      console.log('Latest block:', latestBlockNumber);
 
-      const logs = await publicClient.getLogs({
-        address:undefined, // 监听所有地址
-        fromBlock,  
-        toBlock: 'latest',
-      });
+      const recentTxs: any[] = [];
+      const blocksToCheck = 100; // 检查最近100个区块
 
-      // 过滤与当前地址相关的交易
-      const recentTxs = logs
-        .filter((log: any) =>
-          log.topics.includes(address.toLowerCase()) ||
-          log.address?.toLowerCase() === address.toLowerCase()
-        )
-        .slice(0, 10);
+      // 遍历最近的区块查找与当前地址相关的交易
+      for (let i = 0; i < blocksToCheck && recentTxs.length < 10; i++) {
+        const blockNumber = latestBlockNumber - BigInt(i);
 
+        try {
+          const block = await publicClient.getBlock({
+            blockNumber,
+            includeTransactions: true,
+          });
+
+          // 检查区块中的交易
+          if (block.transactions) {
+            for (const tx of block.transactions) {
+              if (typeof tx === 'object') {
+                // 检查交易的 from 或 to 是否是当前地址
+                if (
+                  tx.from?.toLowerCase() === address.toLowerCase() ||
+                  tx.to?.toLowerCase() === address.toLowerCase()
+                ) {
+                  recentTxs.push({
+                    hash: tx.hash,
+                    from: tx.from,
+                    to: tx.to,
+                    value: tx.value,
+                    blockNumber: block.number,
+                    timestamp: block.timestamp,
+                  });
+
+                  if (recentTxs.length >= 10) break;
+                }
+              }
+            }
+          }
+        } catch (blockErr) {
+          console.error(`Error fetching block ${blockNumber}:`, blockErr);
+        }
+      }
+
+      console.log('Found transactions:', recentTxs);
       setTransactions(recentTxs);
     } catch (err) {
       console.error('Failed to load transactions:', err);
+      alert('Failed to load transactions. Please try again.');
     }
   };
 
@@ -62,9 +92,6 @@ export function DirectTransfer() {
     }
   };
 
-  if(isSuccess){
-      loadRecentTransactions();
-  }
   
   if (!isConnected) {
     return (
@@ -90,7 +117,7 @@ export function DirectTransfer() {
       <div className="bg-gradient-to-br from-blue-600 to-blue-800 rounded-2xl p-6 shadow-xl">
         <div className="text-blue-200 text-sm mb-1">Your Balance</div>
         <div className="text-4xl font-bold text-white">
-          {balance ? formatEther(balance.value) : '0.0'} ETH
+          {balance ? Number(formatEther(balance.value)).toFixed(4) : '0.0000'} ETH
         </div>
         <div className="text-blue-200 text-sm mt-2">on Sepolia Testnet</div>
       </div>
@@ -181,10 +208,39 @@ export function DirectTransfer() {
                 key={index}
                 className="p-4 bg-gray-700/30 rounded-lg border border-gray-600 hover:border-blue-500 transition-colors"
               >
-                <div className="flex items-center justify-between">
-                  <div className="text-sm text-gray-400">Block #{tx.blockNumber?.toString()}</div>
-                  <div className="text-xs font-mono text-gray-500">
-                    {tx.transactionHash?.slice(0, 10)}...{tx.transactionHash?.slice(-8)}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="text-sm text-gray-400">Block #{tx.blockNumber?.toString()}</div>
+                    <div className={`text-xs px-2 py-1 rounded ${
+                      tx.from?.toLowerCase() === address?.toLowerCase()
+                        ? 'bg-red-900/30 text-red-400'
+                        : 'bg-green-900/30 text-green-400'
+                    }`}>
+                      {tx.from?.toLowerCase() === address?.toLowerCase() ? 'Sent' : 'Received'}
+                    </div>
+                  </div>
+
+                  <div className="text-xs font-mono text-gray-500 break-all">
+                    Hash: {tx.hash?.slice(0, 20)}...{tx.hash?.slice(-20)}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div>
+                      <span className="text-gray-400">From:</span>
+                      <div className="font-mono text-gray-300 truncate">
+                        {tx.from?.slice(0, 10)}...{tx.from?.slice(-8)}
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-gray-400">To:</span>
+                      <div className="font-mono text-gray-300 truncate">
+                        {tx.to?.slice(0, 10)}...{tx.to?.slice(-8)}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="text-sm font-medium text-white">
+                    {formatEther(tx.value || 0n)} ETH
                   </div>
                 </div>
               </div>

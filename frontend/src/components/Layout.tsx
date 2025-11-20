@@ -20,6 +20,29 @@ export function Layout({ children }: LayoutProps) {
   const [showNetworkMenu, setShowNetworkMenu] = useState(false);
   const [showAccountMenu, setShowAccountMenu] = useState(false);
 
+  const networkMenuRef = useRef<HTMLDivElement>(null);
+  const accountMenuRef = useRef<HTMLDivElement>(null);
+
+  // 点击外部关闭菜单
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (networkMenuRef.current && !networkMenuRef.current.contains(event.target as Node)) {
+        setShowNetworkMenu(false);
+      }
+      if (accountMenuRef.current && !accountMenuRef.current.contains(event.target as Node)) {
+        setShowAccountMenu(false);
+      }
+    };
+
+    if (showNetworkMenu || showAccountMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showNetworkMenu, showAccountMenu]);
+
   const isActive = (path: string) => location.pathname === path;
 
   // 网络配置
@@ -177,7 +200,7 @@ export function Layout({ children }: LayoutProps) {
               {isConnected ? (
                 <>
                   {/* 网络选择器 */}
-                  <div className="relative" style={{ zIndex: 9999 }}>
+                  <div className="relative" style={{ zIndex: 9999 }} ref={networkMenuRef}>
                     <button
                       onClick={() => setShowNetworkMenu(!showNetworkMenu)}
                       className="flex items-center space-x-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg font-medium transition-colors"
@@ -196,23 +219,12 @@ export function Layout({ children }: LayoutProps) {
                     {showNetworkMenu && (
                       <div
                         className="absolute right-0 mt-2 w-56 bg-gray-800 rounded-lg shadow-xl border border-gray-700"
-                        style={{ zIndex: 9999 }}
-                        onClick={(e) => {
-                          console.log('Menu container clicked');
-                          e.stopPropagation();
-                        }}
                       >
                         <div className="py-2">
                           {networks.map((network) => (
                             <button
                               key={network.id}
-                              onClick={(e) => {
-                                console.log('=== BUTTON CLICKED ===', network.name, network.id);
-                                e.stopPropagation();
-                                e.preventDefault();
-                                console.log('About to call handleSwitchNetwork');
-                                handleSwitchNetwork(network.id);
-                              }}
+                              onClick={() => handleSwitchNetwork(network.id)}
                               className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-700 transition-colors ${
                                 chainId === network.id ? 'text-blue-400 bg-gray-700/50' : 'text-gray-300'
                               }`}
@@ -233,7 +245,7 @@ export function Layout({ children }: LayoutProps) {
                   </div>
 
                   {/* 账户信息 */}
-                  <div className="relative" style={{ zIndex: 9999 }}>
+                  <div className="relative" style={{ zIndex: 9999 }} ref={accountMenuRef}>
                     <button
                       onClick={() => setShowAccountMenu(!showAccountMenu)}
                       className="flex items-center space-x-3 px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-lg font-medium transition-all shadow-lg"
@@ -258,8 +270,6 @@ export function Layout({ children }: LayoutProps) {
                     {showAccountMenu && (
                       <div
                         className="absolute right-0 mt-2 w-72 bg-gray-800 rounded-lg shadow-xl border border-gray-700"
-                        style={{ zIndex: 9999 }}
-                        onClick={(e) => e.stopPropagation()}
                       >
                         <div className="p-4 border-b border-gray-700">
                           <div className="text-xs text-gray-400 mb-1">当前账户</div>
