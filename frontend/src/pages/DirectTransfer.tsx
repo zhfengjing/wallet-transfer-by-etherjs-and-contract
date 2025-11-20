@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAccount, useBalance, useSendTransaction, useWaitForTransactionReceipt, usePublicClient } from 'wagmi';
-import { parseEther, formatEther } from 'viem';
+import { parseEther, formatEther, stringToHex, hexToString } from 'viem';
 
 export function DirectTransfer() {
   const { address, isConnected } = useAccount();
@@ -9,12 +9,20 @@ export function DirectTransfer() {
 
   const [recipient, setRecipient] = useState('');
   const [amount, setAmount] = useState('');
+  const [memo, setMemo] = useState('');
   const [transactions, setTransactions] = useState<any[]>([]);
 
   const { sendTransaction, data: hash, isPending, error } = useSendTransaction();
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
 
- 
+  // 交易成功后清空表单
+  useEffect(() => {
+    if (isSuccess) {
+      setRecipient('');
+      setAmount('');
+      setMemo('');
+    }
+  }, [isSuccess]);
 
   // 加载最近的交易记录
   const loadRecentTransactions = async () => {
@@ -47,6 +55,17 @@ export function DirectTransfer() {
                   tx.from?.toLowerCase() === address.toLowerCase() ||
                   tx.to?.toLowerCase() === address.toLowerCase()
                 ) {
+                  // 尝试从data字段解析备注
+                  let memo = '';
+                  if (tx.input && tx.input !== '0x') {
+                    try {
+                      memo = hexToString(tx.input, { size: 32 }).replace(/\0/g, '');
+                    } catch (err) {
+                      // 如果解析失败，可能是合约调用或其他数据，忽略即可
+                      console.log('Failed to parse memo from tx:', tx.hash);
+                    }
+                  }
+
                   recentTxs.push({
                     hash: tx.hash,
                     from: tx.from,
@@ -54,6 +73,7 @@ export function DirectTransfer() {
                     value: tx.value,
                     blockNumber: block.number,
                     timestamp: block.timestamp,
+                    memo: memo,
                   });
 
                   if (recentTxs.length >= 10) break;
@@ -83,9 +103,13 @@ export function DirectTransfer() {
     }
 
     try {
+      // 将备注编码为hex格式
+      const data = memo ? stringToHex(memo) : undefined;
+
       sendTransaction({
         to: recipient as `0x${string}`,
         value: parseEther(amount),
+        data: data,
       });
     } catch (err) {
       console.error('Transfer failed:', err);
@@ -148,6 +172,19 @@ export function DirectTransfer() {
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               placeholder="0.0"
+              className="w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Memo (Optional)
+            </label>
+            <input
+              type="text"
+              value={memo}
+              onChange={(e) => setMemo(e.target.value)}
+              placeholder="Add a note for this transaction..."
               className="w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
@@ -242,6 +279,13 @@ export function DirectTransfer() {
                   <div className="text-sm font-medium text-white">
                     {formatEther(tx.value || 0n)} ETH
                   </div>
+
+                  {tx.memo && (
+                    <div className="mt-2 pt-2 border-t border-gray-600">
+                      <div className="text-xs text-gray-400 mb-1">Remark:</div>
+                      <div className="text-sm text-gray-300 italic">"{tx.memo}"</div>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
