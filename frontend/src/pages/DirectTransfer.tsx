@@ -34,7 +34,7 @@ export function DirectTransfer() {
       console.log('Latest block:', latestBlockNumber);
 
       const recentTxs: any[] = [];
-      const blocksToCheck = 100; // 检查最近100个区块
+      const blocksToCheck = 20; // 检查最近100个区块
 
       // 遍历最近的区块查找与当前地址相关的交易
       for (let i = 0; i < blocksToCheck && recentTxs.length < 10; i++) {
