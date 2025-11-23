@@ -326,7 +326,11 @@ export function RedPacket() {
             #{currentRoundId !== undefined ? currentRoundId.toString() : '0'}
           </div>
           <div className="text-xs text-gray-400 mt-1">
-            {currentRoundId !== undefined && currentRoundId > 0 ? '红包进行中' : '暂无红包'}
+            {currentRoundId !== undefined && currentRoundId > 0
+              ? (remainingPackets === 0 || remainingAmount === BigInt(0)
+                  ? '红包已结束'
+                  : '红包进行中')
+              : '暂无红包'}
           </div>
         </div>
 
