@@ -275,7 +275,7 @@ export const WALLET_TRANSFER_ABI = [
 ] as const;
 
 // 红包合约地址
-export const RED_PACKET_ADDRESS = '0x7c68cf45C33D3cA9Fb5E1Edb8d852185ACC5684e' as const ;
+export const RED_PACKET_ADDRESS = '0x24C9bc314f2d609c786f5E9B14a2842a54C6A3B3' as const ;
 // 红包合约ABI
 export const RED_PACKET_ABI = [
     {
