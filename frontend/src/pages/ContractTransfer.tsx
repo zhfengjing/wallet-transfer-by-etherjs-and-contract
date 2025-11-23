@@ -3,7 +3,7 @@ import { useAccount, useReadContract, useWriteContract, useWaitForTransactionRec
 import { parseEther, formatEther } from 'viem';
 import { request } from 'graphql-request';
 import { WALLET_TRANSFER_ADDRESS, WALLET_TRANSFER_ABI } from '../constants/contract';
-import { SUBGRAPH_URL, GET_TRANSFERS_QUERY, GET_USER_TRANSFERS_QUERY } from '../constants/subgraph';
+import { SUBGRAPH_URL, GET_USER_TRANSFERS_QUERY } from '../constants/subgraph';
 
 interface Transfer {
   id: string;
@@ -42,7 +42,9 @@ export function ContractTransfer() {
   const { isLoading: isTransferConfirming, isSuccess: isTransferSuccess } = useWaitForTransactionReceipt({
     hash: transferHash,
   });
-
+  // 多次调用useWriteContract时，返回的是不同的实例，不是相同的函数，transfer不等于deposit,useWaitForTransactionReceipt也是如此机制。
+  console.log('writeContract-deposit:', deposit);
+  console.log('writeContract-transfer:', transfer,deposit===transfer);
   // 从The Graph加载转账记录
   const loadTransfers = async () => {
     if (!address) return;

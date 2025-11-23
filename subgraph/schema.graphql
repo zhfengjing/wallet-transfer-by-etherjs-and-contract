@@ -8,3 +8,42 @@ type Transfer @entity(immutable: true) {
   blockTimestamp: BigInt!
   transactionHash: Bytes!
 }
+type NewMessage @entity(immutable: true) {
+  id: ID!
+  sender: Bytes!
+  content: String!
+  timestamp: BigInt!
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
+
+type RedPacketPublished @entity(immutable: true) {
+  id:ID!
+  owner:Bytes!
+  totalPackets: BigInt!
+  totalAmount: BigInt!
+  isEqual: Boolean!
+  timestamp:BigInt!
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
+type RedPacketGrabbed @entity(immutable: true) {
+  id: ID!
+  grabber: Bytes!
+  amount: BigInt!
+  timestamp: BigInt!
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
+type RedPacketReclaimed @entity(immutable: true) {
+  id: ID!
+  owner: Bytes!
+  amount: BigInt!
+  timestamp: BigInt!
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}

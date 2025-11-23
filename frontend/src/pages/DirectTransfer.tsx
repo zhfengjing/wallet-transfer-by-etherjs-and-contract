@@ -61,6 +61,7 @@ export function DirectTransfer() {
                     try {
                       memo = hexToString(tx.input, { size: 32 }).replace(/\0/g, '');
                     } catch (err) {
+                      console.error('Error parsing memo from tx input:', err);
                       // 如果解析失败，可能是合约调用或其他数据，忽略即可
                       console.log('Failed to parse memo from tx:', tx.hash);
                     }

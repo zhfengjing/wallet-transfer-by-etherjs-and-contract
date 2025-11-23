@@ -1,7 +1,7 @@
 import { Contract, parseEther, formatEther } from 'https://cdn.jsdelivr.net/npm/ethers@6.13.0/+esm';
-// import { contractData } from './contractAbi.js';//使用js方式引入
+import { contractData } from './contractAbi.js';//使用js方式引入
 // 使用json方式引入（新，旧两种方式，需要浏览器支持）
-import contractData from './contractAbi.json' with { type: 'json' };//新语法，需要浏览器支持 JSON 模块（Chrome 91+, Firefox 89+）
+// import contractData from './contractAbi.json' with { type: 'json' };//新语法，需要浏览器支持 JSON 模块（Chrome 91+, Firefox 89+）
 // import contractData from './contractAbi.json' assert { type: 'json' }; //旧语法，需要浏览器支持 JSON 模块（Chrome 91+, Firefox 89+）
 console.log('Loaded contract  data:', contractData);
 /**

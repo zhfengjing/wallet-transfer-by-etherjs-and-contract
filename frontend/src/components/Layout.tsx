@@ -119,19 +119,45 @@ export function Layout({ children }: LayoutProps) {
   const handleSwitchAccount = async (e: any) => {
     e.stopPropagation();
     try {
-      // 先断开连接
+      console.log('开始切换账户...');
+
+      // 方法1: 直接请求 MetaMask 切换账户（推荐）
+      if (window.ethereum) {
+        try {
+          await window.ethereum.request({
+            method: 'wallet_requestPermissions',
+            params: [{ eth_accounts: {} }],
+          });
+          console.log('账户切换请求已发送');
+          setShowAccountMenu(false);
+          return;
+        } catch (permError) {
+          console.warn('wallet_requestPermissions 失败，尝试备用方案:', permError);
+        }
+      }
+
+      // 方法2: 断开重连（备用方案）
+      console.log('使用断开重连方式切换账户');
       disconnect();
-      // 等待一小段时间确保断开完成
-      await new Promise(resolve => setTimeout(resolve, 100));
-      // 重新连接，这会触发 MetaMask 弹出账号选择
+
+      // 等待断开完成（增加等待时间）
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // 重新连接
       const metamaskConnector = connectors.find(c => c.name === 'MetaMask' || c.type === 'injected');
       if (metamaskConnector) {
-        connect({ connector: metamaskConnector });
+        console.log('重新连接钱包...');
+        await connect({ connector: metamaskConnector });
+        console.log('账户切换成功');
+      } else {
+        throw new Error('未找到 MetaMask 连接器');
       }
+
       setShowAccountMenu(false);
     } catch (error) {
       console.error('Failed to switch account:', error);
-      alert('切换账号失败，请在 MetaMask 中手动切换账号后刷新页面');
+      alert('切换账号失败，请在 MetaMask 中手动切换账号');
+      setShowAccountMenu(false);
     }
   };
 
@@ -192,6 +218,16 @@ export function Layout({ children }: LayoutProps) {
                 }`}
               >
                 Contract Transfer
+              </Link>
+              <Link
+                to="/redpacket"
+                className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+                  isActive('/redpacket')
+                    ? 'bg-red-600 text-white shadow-lg shadow-red-500/50'
+                    : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                }`}
+              >
+                Red Packet
               </Link>
             </div>
 

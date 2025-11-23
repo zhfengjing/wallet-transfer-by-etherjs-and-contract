@@ -2,14 +2,15 @@ specVersion: 0.0.5
 schema:
   file: ./schema.graphql
 dataSources:
+  # WalletTransfer contract data source
   - kind: ethereum
     name: WalletTransfer
     # network: localhost
     network: sepolia
     source:
-      address: "0x069357B8C08eeF623B47dF4302AF7a48F380bb82" # 替换为你的合约地址
+      address: "0x9268fe63Af52eb54D556BB809d7AE573dd5B7732" # 替换为你的合约地址
       abi: WalletTransfer
-      startBlock: 9655684 # 替换为合约部署的区块号
+      startBlock: 9680685 # 替换为合约部署的区块号
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
@@ -22,4 +23,56 @@ dataSources:
       eventHandlers:
         - event: Transfer(indexed address,indexed address,uint256,uint256)
           handler: handleTransfer
-      file: ./src/mapping.ts
+      file: ./src/mappings/wallet-transfer.ts
+
+  # Message contract data source
+  - kind: ethereum
+    name: Message
+    # network: localhost
+    network: sepolia
+    source:
+      address: "0xa20fe22388fFaF6C6208caCf6446Ec1C7D703c4f" # 替换为你的合约地址
+      abi: Message
+      startBlock: 9680686 # 替换为合约部署的区块号
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - NewMessage
+      abis:
+        - name: Message
+          file: ./abis/Message.json
+      eventHandlers:
+        - event: NewMessage(indexed address,string,uint256)
+          handler: handleNewMessage
+      file: ./src/mappings/message.ts
+
+  # RedPacket contract data source
+  - kind: ethereum
+    name: RedPacket
+    # network: localhost
+    network: sepolia
+    source:
+      address: "0x7c68cf45C33D3cA9Fb5E1Edb8d852185ACC5684e" # 替换为你的合约地址
+      abi: RedPacket
+      startBlock: 9684148 # 替换为合约部署的区块号
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - RedPacketPublished
+        - RedPacketGrabbed
+        - RedPacketReclaimed
+      abis:
+        - name: RedPacket
+          file: ./abis/RedPacket.json
+      eventHandlers:
+        - event: RedPacketPublished(indexed address,uint8,uint256,bool,uint256)
+          handler: handleRedPacketPublished
+        - event: RedPacketGrabbed(indexed address,uint256,uint256)
+          handler: handleRedPacketGrabbed
+        - event: RedPacketReclaimed(indexed address,uint256,uint256)
+          handler: handleRedPacketReclaimed
+      file: ./src/mappings/red-packet.ts
