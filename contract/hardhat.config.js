@@ -22,7 +22,8 @@ module.exports = {
     sepolia: {
       url: process.env.SEPOLIA_RPC_URL || "",
       accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
-      chainId: 11155111
+      chainId: 11155111,
+      timeout: 60000
     }
   },
   paths: {
@@ -30,5 +31,22 @@ module.exports = {
     tests: "./test",
     cache: "./cache",
     artifacts: "./artifacts"
+  },
+  etherscan: {
+    apiKey: process.env.ETHERSCAN_API_KEY || "",
+    customChains: [
+      {
+        network: "sepolia",
+        chainId: 11155111,
+        urls: {
+          apiURL: "https://api-sepolia.etherscan.io/api",
+          browserURL: "https://sepolia.etherscan.io"
+        }
+      }
+    ]
+  },
+  // 增加全局超时配置
+  mocha: {
+    timeout: 200000
   }
 };

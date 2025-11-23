@@ -16,11 +16,11 @@
     "timestamp": "2025-11-22T05:36:12.457Z"
   },
   "RedPacket": {
-    "contractAddress": "0x7c68cf45C33D3cA9Fb5E1Edb8d852185ACC5684e",
+    "contractAddress": "0x24C9bc314f2d609c786f5E9B14a2842a54C6A3B3",
     "network": "sepolia",
     "chainId": 11155111,
-    "deploymentTxHash": "0x8e492821f80e337367133b11231cdbe38ea518763abe5b08ada510d6c879a9f5",
-    "blockNumber": 9684148,
-    "timestamp": "2025-11-22T17:11:36.363Z"
+    "deploymentTxHash": "0x619f4a915cbfcfa2fc106708e156c85736ff72be7ab73b847e872c0114f50eab",
+    "blockNumber": 9689521,
+    "timestamp": "2025-11-23T11:39:48.396Z"
   }
 }
