@@ -11,9 +11,6 @@ module.exports = {
         enabled: true,
         runs: 200
       },
-      sourcify:{
-        enabled: false
-      }
     }
   },
   networks: {
@@ -27,7 +24,7 @@ module.exports = {
       url: process.env.SEPOLIA_RPC_URL || "",
       accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
       chainId: 11155111,
-      timeout: 60000
+      timeout: 120000  // 增加到 120 秒
     }
   },
   paths: {
@@ -49,6 +46,12 @@ module.exports = {
       }
     ]
   },
+   sourcify:{
+        enabled: false
+  },
+  // 如果在国内，配置代理
+  httpProxy: process.env.HTTP_PROXY || undefined,
+  httpsProxy: process.env.HTTPS_PROXY || undefined,
   // 增加全局超时配置
   mocha: {
     timeout: 200000
